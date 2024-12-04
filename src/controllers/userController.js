@@ -10,3 +10,22 @@ export const createUser = async (req, res) => {
         res.status(500).json({message: "Internal Server"});
     }
 }
+
+export const userLogin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Call the service to verify login
+        const result = await userService.verifyUserLogin(email, password);
+
+        // Handle service response
+        if (result.error) {
+            return res.status(401).json({ error: result.error });
+        }
+
+        return res.json(result); // Send success response with token
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
