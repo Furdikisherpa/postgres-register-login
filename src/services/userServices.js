@@ -1,6 +1,15 @@
 import bcrypt from 'bcrypt'; // Use bcrypt instead of bcrypt.js
-import jwtGenerator from '../utils/jwtGenerator.js'; // Ensure the correct path and extension
 import { query } from '../config/db.js'; // Your database connection setup
+import nodemailer from 'nodemailer';
+
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
+
 
 // Registration function to create a new user
 export const RegistrationUser = async (userData) => {
@@ -47,38 +56,58 @@ export const getUserByEmail = async (email) => {
 };
 
 // Function to verify user login by comparing the provided email and password
-export const verifyUserLogin = async (email, password) => {
-    try {
+export const verifyUserLogin = async (email) => {
         // Query the database to fetch a user by email
-        const userResult = await query(
+        const { rows } = await query(
             `SELECT * FROM user_tb WHERE user_email = $1`,
             [email] // The email parameter
         );
 
-        // If no user found, return an error message
-        if (userResult.rows.length === 0) {
-            return { error: "Sorry! An account with that email doesn't exist!" };
+       
+        return rows[0]; // This returns the first row (the newly created user)
+
+    
+     
+};
+
+
+//Fetch email and name from the database
+const getUserEmailAndName = async (userId) => {
+    try{
+        const result = await query('SELECT user_email, full_name FROM user_tb WHERE user_id = $1', [userId]);
+        if(result.rows.length === 0){
+            throw new Error('User not found');
         }
-
-        const user = userResult.rows[0];
-
-        // Compare the provided password with the hashed password stored in the database
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-
-        //If the password doesn't match, return an error message 
-        if (!isPasswordValid) {
-            return { error: "Sorry! Email or password is incorrect" };
-        }
-
-        // If the password is valid, generate a JWT Tokem for the user
-        const token = jwtGenerator(user.user_id); //Generate a JWT  token using the user's ID
-
-
-        // Return a success message along with the generated token 
-        return { message: "Login successfully!", token }; //Return success message and token
-
-    } catch (error) {
-        //If an error occurs, throw an error with the message
-        throw new Error(error.message);// Throw the error message if any unexpected error occurs
+        return result.rows[0];
+    }catch(error){
+        throw new Error('Error fetching user email and name from database: '+ error.message);
     }
 };
+
+//Send email function
+export const sendEmail = async (userId, subject, message) => {
+    try{
+        const user = await getUserEmailAndName(userId);  // Get the user's email and name
+        const { user_email, full_name } = user;
+        console.log(user);
+    
+        // Personalize the email by including the user's name
+        const personalizedMessage = `Hello ${full_name},\n\n${message}`;  // Modify message with name
+
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: user_email,
+            subject: subject,
+            text: personalizedMessage,
+
+        });
+
+        console.log('Email sent successfully');
+
+    } catch (error){
+
+        console.log('Error sending email:', error);
+        throw new Error('Error sending email', error.message);
+    }
+}
+

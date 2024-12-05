@@ -1,4 +1,6 @@
 import * as userService from "../services/userServices.js"
+import bcrypt from 'bcrypt'; // Use bcrypt instead of bcrypt.js
+import jwtGenerator from '../utils/jwtGenerator.js'; // Ensure the correct path and extension
 
 export const createUser = async (req, res) => {
     try {
@@ -31,23 +33,54 @@ export const createUser = async (req, res) => {
 
 export const userLogin = async (req, res) => {
     try {
-        //Extract email and password from the request body
         const { email, password } = req.body;
 
-        // Call the service function to verify login credentials
-        const result = await userService.verifyUserLogin(email, password);
-
-        // if there is an error in the login result (e.g., invalid credentials), send a 401 error response
-        if (result.error) {
-            return res.status(401).json({ error: result.error });
+        // Basic validation to ensure both fields are provided
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required." });
         }
 
-        //If login is successful, return the result (which includes the token) in the response
-        return res.json(result); // Send success response with token
+        // Call the service function to verify login credentials
+        const userResult = await userService.verifyUserLogin(email, password);
+
+        // Ensure the userResult is valid
+        if (!userResult) {
+            console.error('Invalid response from verifyUserLogin:', userResult);
+            return res.status(404).json({ error: "Sorry! An account with that email doesn't exist!" });
+        }
+
+        // Compare the provided password with the hashed password stored in the database
+        const isPasswordValid = await bcrypt.compare(password, userResult.password);
+
+        // If the password doesn't match, return an error message
+        if (!isPasswordValid) {
+            return res.status(401).json({ error: "Sorry! Email or password is incorrect" });
+        }
+
+        // If the password is valid, generate a JWT token for the user
+        const token = jwtGenerator(userResult.user_id);
+
+        // Return a success message along with the generated token
+        return res.status(200).json({ message: "Login successfully!", token });
 
     } catch (error) {
-        //If an error occurs during login, log the error message and send a 500 error response
-        console.error(error.message);
-        res.status(500).json({ error: "Internal Server Error" });
+        // Log the error for debugging purposes
+        console.error('Error logging in users:', error.message, error.stack);
+
+        // Send a generic error message with status 500
+        return res.status(500).json({ error: "An error occurred during login. Please try again." });
     }
 };
+
+
+export const sendEmailToUser = async (req, res) => {
+    const { userId, subject, message } = req.body;
+  
+    try {
+      await userService.sendEmail(userId, subject, message); // Send email
+      res.status(200).json({ message: 'Email sent successfully' });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error sending email' });
+    }
+  };
