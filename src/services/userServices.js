@@ -15,16 +15,16 @@ const transporter = nodemailer.createTransport({
 export const RegistrationUser = async (userData) => {
 
     //1. destructure the values from req.body
-    const { full_name, user_email, user_address, user_number, user_qualification, password } = userData;
+    const { full_name, user_email, user_address, user_number, user_qualification, password, otp_code, otp_expiration, is_verified } = userData;
 
     // 2. Hash the password before storing it
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 3. Insert the user data into the database
     const { rows } = await query(
-        `INSERT INTO user_tb (full_name, user_email, user_address, user_number, user_qualification, password)
-        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [full_name, user_email, user_address, user_number, user_qualification, hashedPassword]
+        `INSERT INTO user_tb (full_name, user_email, user_address, user_number, user_qualification, password, otp_code, otp_expiration, is_verified)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [full_name, user_email, user_address, user_number, user_qualification, hashedPassword, otp_code, otp_expiration, is_verified]
     );
 
     // Return the newly created user from the query result
@@ -89,7 +89,6 @@ export const sendEmail = async (userId, subject, message) => {
     try{
         const user = await getUserEmailAndName(userId);  // Get the user's email and name
         const { user_email, full_name } = user;
-        console.log(user);
     
         // Personalize the email by including the user's name
         const personalizedMessage = `Hello ${full_name},\n\n${message}`;  // Modify message with name

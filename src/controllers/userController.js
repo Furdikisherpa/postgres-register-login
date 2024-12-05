@@ -1,11 +1,15 @@
 import * as userService from "../services/userServices.js"
+import  generateOTP  from "../utils/otp.generator.js";
 import bcrypt from 'bcrypt'; // Use bcrypt instead of bcrypt.js
 import jwtGenerator from '../utils/jwtGenerator.js'; // Ensure the correct path and extension
+import sendEmail from "../utils/nodemailer.js";
 
 export const createUser = async (req, res) => {
     try {
         // Extract user data from the request body
         const userData = req.body;
+        console.log(userData);
+        const otp = generateOTP()
 
         //Check if the user already exits by email (or other unique field)
         const existingUser = await userService.getUserByEmail(userData.user_email);
@@ -14,9 +18,21 @@ export const createUser = async (req, res) => {
         if (existingUser) {
             return res.status(400).json({ message: "User already exists" });
             }
+
+        const queries = {
+            ...userData,
+            otp_code: otp,  // Add the OTP code
+            otp_expiration: new Date(Date.now() + 10 * 60 * 1000),  // Set OTP expiration to 10 minutes
+            is_verified: false,  // Set verification status to false initially
+        }
+
+        const subject = 'Email Verification'
+        const message = `Your OTP code is: ${otp}`
+
+        sendEmail(queries.user_email, subject, message)
                 
         //If no user exists, create a new user by calling the RegistrationUser service    
-        const newUser = await userService.RegistrationUser(userData);
+        const newUser = await userService.RegistrationUser(queries);
 
         // Send a success response with status 200 and a success message
         res.status(200).json({
