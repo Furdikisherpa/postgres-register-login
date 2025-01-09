@@ -14,7 +14,7 @@ db.connect().then(
 	console.log("Database Connected")
 );
 
-console.log('PG_PASSWORD:', process.env.PG_PASSWORD);
+// console.log('PG_PASSWORD:', process.env.PG_PASSWORD);
 
 db.on('error', (err) => {
     console.error('Unexpected error on idle client', err);

@@ -19,6 +19,8 @@ export const createUser = async (req, res) => {
             return res.status(400).json({ message: "User already exists" });
             }
 
+
+            //this data is to be stored in database
         const queries = {
             ...userData,
             otp_code: otp,  // Add the OTP code
@@ -100,3 +102,91 @@ export const sendEmailToUser = async (req, res) => {
       res.status(500).json({ error: 'Error sending email' });
     }
   };
+
+
+ export  const ResendOTP = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        // Generate a new OTP and set expiration
+        const otp = generateOTP();
+        const queries = {
+            email,
+            otp_code: otp,
+            otp_expiration: new Date(Date.now() + 10 * 60 * 1000), // OTP valid for 10 minutes
+        };
+
+        const subject = 'Email Verification';
+        const message = `Your OTP code is: ${otp}`;
+
+        // Check if the email exists in the database
+        const emailExists = await userService.EmailExists({ email });
+
+        if (!emailExists || emailExists.length === 0) {
+            // If email doesn't exist, return a 404 error
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Send the OTP to the user's email
+        sendEmail(email, subject, message);
+
+        // Update the OTP and expiration in the database
+        const result = await userService.ResendOTP(queries);
+
+        // Return success response
+        return res.status(200).json({
+            message: 'OTP is resent',
+            result,
+        });
+    } catch (error) {
+        console.error('Error resending OTP:', error.message);
+
+        // Handle errors and return 500 response
+        return res.status(500).json({ message: 'Error resending OTP', error: error.message });
+    }
+};
+
+
+export const VerifyEmail = async (req, res) => {
+    try {
+        const { email, otp_code } = req.body;
+
+        // Step 1: Check if the email exists
+        const emailExists = await userService.EmailExists({ email });
+
+        if (emailExists.length <= 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Step 2: Attempt to verify the email
+        try {
+            const user = await userService.VerifyEmail({ email, otp_code });
+
+            // If the OTP is invalid or the user could not be found
+            if (!user) {
+                return res.status(400).json({ message: 'OTP is invalid' });
+            }
+
+            // If the email is successfully verified
+            const result = user;
+
+            console.log(result);
+
+            return res.status(200).json({
+                message: 'Email is verified',
+                result: result,
+            });
+        } catch (error) {
+            // Handling specific errors
+            if (error.message === 'OTP is expired') {
+                return res.status(400).json({ message: 'OTP is expired' });
+            }
+            if (error.message === 'Email has already been verified') {
+                return res.status(401).json({ message: 'Email has already been verified' });
+            }
+        }
+    } catch (error) {
+        // General error handling
+        return res.status(500).json({ message: error.message });
+    }
+};

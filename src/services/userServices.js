@@ -109,4 +109,90 @@ export const sendEmail = async (userId, subject, message) => {
         throw new Error('Error sending email', error.message);
     }
 }
+export const ResendOTP = async ({ email, otp_code, otp_expiration }) => {
+    try {
+        // Raw SQL query to update the OTP code and expiration for the user with the given email
+        const result = await query(
+            `UPDATE user_tb 
+             SET otp_code = $1, otp_expiration = $2 
+             WHERE user_email = $3 
+             RETURNING *`, // This query updates and returns the updated user details
+            [otp_code, otp_expiration, email] // Parameters to update and match the email
+        );
 
+        // If no user is found or no rows were affected, return null
+        if (result.rows.length === 0) {
+            return null;
+        }
+
+        // Return the updated user details
+        return result.rows[0]; // Return the first row (the updated user)
+
+    } catch (error) {
+        console.error('Error updating OTP:', error);
+        throw new Error('Failed to update OTP in the database.');
+    }
+};
+
+export const EmailExists = async ({ email }) => {
+    try {
+        // Raw SQL query to check if the email exists in the database
+        const result = await query(
+            'SELECT * FROM user_tb WHERE user_email = $1', // SQL query to match email
+            [email] // Email parameter
+        );
+
+        // If result.rows has any records, it means the email exists
+        if (result.rows.length > 0) {
+            return result.rows; // Return the matching records (users)
+        }
+
+        // If no matching records are found, return an empty array or null
+        return []; // No records found
+
+    } catch (error) {
+        console.error('Error checking email existence:', error);
+        throw new Error('Failed to check email existence in the database.');
+    }
+};
+
+export const VerifyEmail = async ({ email, otp_code }) => {
+    try {
+        // First, check if the user exists with the provided email and OTP code
+        const result = await query(
+            `SELECT * FROM user_tb WHERE user_email = $1 AND otp_code = $2`,
+            [email, otp_code]
+        );
+
+        // If no user is found, return null
+        if (result.rows.length === 0) return null;
+
+        const user = result.rows[0]; // Get the first (and only) user from the result
+
+        // Check if OTP has expired
+        const OTPExpired = new Date() > new Date(user.otp_expiration);
+        if (OTPExpired) throw new Error('OTP is expired');
+
+        // Check if the email is already verified
+        const alreadyVerified = user.is_verified === true;
+        if (alreadyVerified) throw new Error('Email has been verified');
+
+        // Update the user's is_verified status to true
+        await query(
+            `UPDATE user_tb SET is_verified = true WHERE user_email = $1`,
+            [email]
+        );
+
+        // Fetch the updated user data
+        const updatedResult = await query(
+            `SELECT * FROM user_tb WHERE user_email = $1`,
+            [email]
+        );
+
+        // Return the updated user data
+        return updatedResult.rows[0];
+
+    } catch (error) {
+        throw error;
+    }
+};
